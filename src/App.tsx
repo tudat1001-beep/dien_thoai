@@ -350,18 +350,19 @@ export default function App() {
     // Update Product Stock Count and available IMEIs array
     const updatedProducts: SanPham[] = [];
     const nextProducts = sanPham.map(p => {
-      // Find if this product is part of checkout items
       const inSale = itemDetails.find(d => d.sanPhamId === p.id);
-      if (inSale && inSale.imei) {
+      if (inSale) {
         const currentImeis = p.imei ? p.imei.split(',').map(i => i.trim()).filter(Boolean) : [];
-        // Subtract the selected IMEI from catalog
-        const remainingImeis = currentImeis.filter(i => i !== inSale.imei);
+        let remainingImeis = currentImeis;
+        if (inSale.imei) {
+          remainingImeis = currentImeis.filter(i => i !== inSale.imei);
+        }
         const newTonKho = p.tonKho - inSale.soLuong;
         const updated = {
           ...p,
           imei: remainingImeis.join(', '),
           tonKho: newTonKho < 0 ? 0 : newTonKho,
-          trangThai: (newTonKho - inSale.soLuong > 0 ? 'Còn hàng' : 'Hết hàng') as 'Còn hàng' | 'Hết hàng'
+          trangThai: newTonKho > 0 ? 'Còn hàng' : 'Hết hàng'
         } as SanPham;
         updatedProducts.push(updated);
         return updated;

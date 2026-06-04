@@ -2,6 +2,15 @@ import React, { useState, useMemo } from 'react';
 import { SanPham, LichSuGia } from '../types';
 import { Search, PlusCircle, Bookmark, Monitor, Edit2, ShieldAlert, Sparkles, AlertCircle } from 'lucide-react';
 
+function findNextProductId(sanPham: SanPham[]): string {
+  if (sanPham.length === 0) return 'SP001';
+  const nums = sanPham
+    .map(p => parseInt(p.id.replace('SP', ''), 10))
+    .filter(n => !isNaN(n));
+  const max = nums.length > 0 ? Math.max(...nums) : 0;
+  return `SP${String(max + 1).padStart(3, '0')}`;
+}
+
 interface ProductsViewProps {
   sanPham: SanPham[];
   lichSuGia: LichSuGia[];
@@ -66,7 +75,7 @@ export default function ProductsView({
       return;
     }
 
-    const nextId = `SP00${sanPham.length + 1}`;
+    const nextId = findNextProductId(sanPham);
 
     const newSp: SanPham = {
       id: nextId,

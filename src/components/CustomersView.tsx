@@ -72,7 +72,14 @@ export default function CustomersView({
     return new Intl.NumberFormat('vi-VN').format(parseInt(cleanStr, 10));
   };
 
-  // Compile customer debt map dynamically
+function findNextCustomerId(khachHang: KhachHang[]): string {
+  if (khachHang.length === 0) return 'KH001';
+  const nums = khachHang
+    .map(k => parseInt(k.id.replace('KH', ''), 10))
+    .filter(n => !isNaN(n));
+  const max = nums.length > 0 ? Math.max(...nums) : 0;
+  return `KH${String(max + 1).padStart(3, '0')}`;
+}
   const customerDebts = useMemo(() => {
     const debtsMap: Record<string, number> = {};
     
@@ -112,7 +119,7 @@ export default function CustomersView({
       return;
     }
 
-    const nextId = `KH00${khachHang.length + 1}`;
+    const nextId = findNextCustomerId(khachHang);
     const newKh: KhachHang = {
       id: nextId,
       ten: newTen,

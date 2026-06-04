@@ -281,8 +281,8 @@ export default function POSView({
     setConfirmDialog({
       message: 'Quá trình tạo hóa đơn sẽ trừ trực tiếp vào tồn kho, ghi nhận doanh thu và cập nhật công nợ đối tác. Bạn muốn tiếp tục chứ?',
       onConfirm: () => {
-        // Generate Invoice
-        const invoiceId = `HD${Math.floor(100 + Math.random() * 900)}`;
+        // Generate Invoice ID with timestamp + random suffix for uniqueness
+        const invoiceId = `HD${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 100)}`;
         const invoiceDate = new Date().toISOString().split('T')[0];
 
         let finalKhId = selectedKhId;
@@ -325,11 +325,11 @@ export default function POSView({
 
         // Generate Invoice Details
         const invoiceDetails: ChiTietHoaDon[] = cart.map((item) => ({
-          id: `CTHD${Math.floor(1000 + Math.random() * 9000)}`,
+          id: `CTHD${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 1000)}`,
           hoaDonId: invoiceId,
           sanPhamId: item.sanPhamId,
           tenSanPham: item.ten,
-          imei: '',
+          imei: item.imeiSelected || '',
           soLuong: item.soLuong,
           donGia: item.donGia,
           thanhTien: item.donGia * item.soLuong
