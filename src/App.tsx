@@ -557,7 +557,6 @@ export default function App() {
 
     // Restock the product inventory & re-insert IMEI
     const currentImeis = matchingProd.imei ? matchingProd.imei.split(',').map(i => i.trim()).filter(Boolean) : [];
-    // Prepend returned imei to prevent loss of IMEI index
     if (newReturn.imei && !currentImeis.includes(newReturn.imei)) {
       currentImeis.unshift(newReturn.imei);
     }
@@ -570,12 +569,14 @@ export default function App() {
     };
 
     let returnDebtOffset: CongNo | undefined = undefined;
+    let updatedInvoiceForDebt: HoaDon | undefined = undefined;
+
     if (newReturn.phuongThuc === 'Trừ vào công nợ') {
       const origHd = hoaDon.find(hi => hi.id === newReturn.hoaDonId);
       const targetCustomer = origHd ? origHd.khachHangId : '';
 
-      if (targetCustomer) {
-        const debtId = `CN${Math.floor(1000 + Math.random() * 9000)}`;
+      if (targetCustomer && origHd) {
+        const debtId = `CN${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 100)}`;
         returnDebtOffset = {
           id: debtId,
           khachHangId: targetCustomer,
@@ -585,12 +586,22 @@ export default function App() {
           hoaDonId: newReturn.hoaDonId,
           ghiChu: `Duyệt khấu trừ sỉ do hoàn trả sản phẩm ${newReturn.sanPhamId} từ kiểm kê ${newReturn.id}`
         };
+
+        // CRITICAL FIX: Update HoaDon.conNo and HoaDon.daTra to keep invoice consistent
+        updatedInvoiceForDebt = {
+          ...origHd,
+          daTra: (origHd.daTra || 0) + newReturn.soTienHoanTrat,
+          conNo: Math.max(0, origHd.conNo - newReturn.soTienHoanTrat)
+        };
       }
     }
 
     if (isSupabaseConfigured) {
       try {
         await sUpsertTraHangAndInventory(newReturn, updatedProd, returnDebtOffset);
+        if (updatedInvoiceForDebt) {
+          await sUpdateHoaDonAfterPayment(updatedInvoiceForDebt);
+        }
       } catch (err) {
         alert('Lỗi tạo đơn trả hàng thu hồi lên Supabase!');
         return;
@@ -604,14 +615,19 @@ export default function App() {
       setCongNo(prev => [returnDebtOffset!, ...prev]);
     }
 
-    // Update hoaDon daTra field
-    const currentHd = hoaDon.find(h => h.id === newReturn.hoaDonId);
-    if (currentHd) {
-      const updatedHd: HoaDon = {
-        ...currentHd,
-        daTra: (currentHd.daTra || 0) + newReturn.soTienHoanTrat
-      };
-      setHoaDon(prev => prev.map(h => h.id === newReturn.hoaDonId ? updatedHd : h));
+    // CRITICAL FIX: Update HoaDon with BOTH daTra and conNo
+    if (updatedInvoiceForDebt) {
+      setHoaDon(prev => prev.map(h => h.id === newReturn.hoaDonId ? updatedInvoiceForDebt! : h));
+    } else {
+      // Fallback: only update daTra if not already handled above
+      const currentHd = hoaDon.find(h => h.id === newReturn.hoaDonId);
+      if (currentHd) {
+        const updatedHd: HoaDon = {
+          ...currentHd,
+          daTra: (currentHd.daTra || 0) + newReturn.soTienHoanTrat
+        };
+        setHoaDon(prev => prev.map(h => h.id === newReturn.hoaDonId ? updatedHd : h));
+      }
     }
   };
 
