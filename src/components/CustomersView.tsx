@@ -88,7 +88,7 @@ function findNextCustomerId(khachHang: KhachHang[]): string {
       debtsMap[kh.id] = 0;
     });
 
-    // Compute from CongNo
+    // Compute from CongNo log (source of truth)
     congNo.forEach(cn => {
       if (debtsMap[cn.khachHangId] !== undefined) {
         if (cn.loai === 'Ghi nợ') {
@@ -173,19 +173,42 @@ function findNextCustomerId(khachHang: KhachHang[]): string {
       .sort((a, b) => b.ngay.localeCompare(a.ngay));
   }, [hoaDon, selectedCustomerId]);
 
-  // Stats for active customer
+  // Stats for active customer — formula: Còn nợ = Tổng mua - Đã thu - Trả lại
   const activeCustomerStats = useMemo(() => {
     if (!selectedCustomerId) return { totalOrders: 0, totalSpent: 0, totalDebt: 0, totalReturns: 0 };
+
+    // Get CongNo payments for this customer's invoices
+    const customerInvoiceIds = new Set(
+      hoaDon
+        .filter(h => h.khachHangId === selectedCustomerId)
+        .map(h => h.id)
+    );
+
     const invoices = hoaDon.filter(h => h.khachHangId === selectedCustomerId);
+    const totalSpent = invoices.reduce((sum, h) => sum + h.thanhTien, 0);
+
+    // Sum CongNo payments linked to these invoices
+    let totalPaidViaCongNo = 0;
+    congNo.forEach(c => {
+      if (customerInvoiceIds.has(c.hoaDonId) && c.loai === 'Thanh toán') {
+        totalPaidViaCongNo += c.soTien;
+      }
+    });
+
+    const totalPaid = invoices.reduce((sum, h) => sum + h.daThanhToan, 0) + totalPaidViaCongNo;
+    const totalReturns = traHang
+      .filter(t => invoices.some(i => i.id === t.hoaDonId))
+      .reduce((sum, t) => sum + t.soTienHoanTrat, 0);
+
+    const totalDebt = Math.max(0, totalSpent - totalPaid - totalReturns);
+
     return {
       totalOrders: invoices.length,
-      totalSpent: invoices.reduce((sum, h) => sum + h.thanhTien, 0),
-      totalDebt: invoices.reduce((sum, h) => sum + h.conNo, 0),
-      totalReturns: traHang
-        .filter(t => invoices.some(i => i.id === t.hoaDonId))
-        .reduce((sum, t) => sum + t.soTienHoanTrat, 0)
+      totalSpent,
+      totalDebt,
+      totalReturns
     };
-  }, [hoaDon, selectedCustomerId, traHang]);
+  }, [hoaDon, selectedCustomerId, congNo, traHang]);
 
   const activeCustomerDebtLogs = useMemo(() => {
     if (!selectedCustomerId) return [];

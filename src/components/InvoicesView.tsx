@@ -193,35 +193,42 @@ export default function InvoicesView({
     return chiTietHoaDon.filter(d => d.hoaDonId === editingInvoice.id);
   }, [editingInvoice, chiTietHoaDon]);
 
-  // Analytics of filtered list
+  // Analytics of filtered list — formula: Còn nợ = Tổng thành tiền - Đã thu - Trả lại
   const summaryKPIs = useMemo(() => {
+    // Build map of CongNo payments by invoice
+    const invoiceCongNoPayments = new Map<string, number>();
+    congNo.forEach(c => {
+      if (c.hoaDonId && c.loai === 'Thanh toán') {
+        invoiceCongNoPayments.set(
+          c.hoaDonId,
+          (invoiceCongNoPayments.get(c.hoaDonId) || 0) + c.soTien
+        );
+      }
+    });
+
     let salesCount = finalizedInvoices.length;
-    let totalSalesVal = 0;
-    let totalDiscount = 0;
     let totalRevenue = 0;
     let totalReceived = 0;
     let totalDebtOutstanding = 0;
     let totalReturned = 0;
 
     finalizedInvoices.forEach(h => {
-      totalSalesVal += h.tongTien;
-      totalDiscount += h.giamGia;
       totalRevenue += h.thanhTien;
-      totalReceived += h.daThanhToan;
-      totalDebtOutstanding += h.conNo;
+      const congNoPayment = invoiceCongNoPayments.get(h.id) || 0;
+      totalReceived += h.daThanhToan + congNoPayment;
       totalReturned += h.daTra || 0;
     });
 
+    totalDebtOutstanding = Math.max(0, totalRevenue - totalReceived - totalReturned);
+
     return {
       salesCount,
-      totalSalesVal,
-      totalDiscount,
       totalRevenue,
       totalReceived,
       totalDebtOutstanding,
       totalReturned
     };
-  }, [finalizedInvoices]);
+  }, [finalizedInvoices, congNo]);
 
   const formatMoney = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
@@ -432,7 +439,8 @@ export default function InvoicesView({
             <div className="md:hidden divide-y divide-slate-100">
               {finalizedInvoices.map((invoice) => {
                 const customerObj = khachHang.find(k => k.id === invoice.khachHangId);
-                const isDebt = invoice.conNo > 0;
+                const realDebt = Math.max(0, invoice.thanhTien - invoice.daThanhToan - (invoice.daTra || 0));
+                const isDebt = realDebt > 0;
                 
                 return (
                   <div 
@@ -451,7 +459,7 @@ export default function InvoicesView({
                           ? 'bg-amber-50 text-amber-700 border border-amber-200'
                           : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                       }`}>
-                        {isDebt ? formatMoney(invoice.conNo) : 'OK'}
+                        {isDebt ? formatMoney(realDebt) : 'Đã dứt'}
                       </span>
                     </div>
                     
@@ -507,7 +515,8 @@ export default function InvoicesView({
               <tbody className="divide-y divide-slate-100 font-sans">
                 {finalizedInvoices.map((invoice, index) => {
                   const customerObj = khachHang.find(k => k.id === invoice.khachHangId);
-                  const isDebt = invoice.conNo > 0;
+                  const realDebt = Math.max(0, invoice.thanhTien - invoice.daThanhToan - (invoice.daTra || 0));
+                  const isDebt = realDebt > 0;
 
                   return (
                     <tr key={invoice.id} className="hover:bg-slate-50/65 transition-all">
@@ -554,7 +563,7 @@ export default function InvoicesView({
                         {formatMoney(invoice.daThanhToan)}
                       </td>
 
-                      {/* Returned Amount */}
+                      {/* Outstanding remaining debt: Tổng - Đã thu - Trả lại */}
                       <td className="py-3 px-4 text-right">
                         {(invoice.daTra || 0) > 0 ? (
                           <span className="font-mono text-purple-700 font-bold text-[11.5px]">
@@ -565,22 +574,25 @@ export default function InvoicesView({
                         )}
                       </td>
 
-                      {/* Outstanding remaining debt */}
+                      {/* Outstanding remaining debt: thanhTien - daThanhToan - daTra */}
                       <td className="py-3 px-4 text-right">
-                        {isDebt ? (
-                          <div className="space-y-0.5">
-                            <span className="font-extrabold font-mono text-amber-700 text-xs block">
-                              {formatMoney(invoice.conNo)}
+                        {(() => {
+                          const realDebt = Math.max(0, invoice.thanhTien - invoice.daThanhToan - (invoice.daTra || 0));
+                          return realDebt > 0 ? (
+                            <div className="space-y-0.5">
+                              <span className="font-extrabold font-mono text-amber-700 text-xs block">
+                                {formatMoney(realDebt)}
+                              </span>
+                              <span className="text-[8px] uppercase tracking-wide px-1.5 py-0.2 rounded font-black bg-amber-50 text-amber-700 border border-amber-100 inline-block font-sans">
+                                Còn nợ
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-[9px] uppercase tracking-wider text-emerald-600 bg-emerald-50 py-0.5 px-1.5 border border-emerald-100 rounded-lg font-black font-sans">
+                              Đã dứt điểm
                             </span>
-                            <span className="text-[8px] uppercase tracking-wide px-1.5 py-0.2 rounded font-black bg-amber-50 text-amber-700 border border-amber-100 inline-block font-sans">
-                              Nợ gối lại
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-[9px] uppercase tracking-wider text-emerald-600 bg-emerald-50 py-0.5 px-1.5 border border-emerald-100 rounded-lg font-black font-sans">
-                            Đã dứt điểm
-                          </span>
-                        )}
+                          );
+                        })()}
                       </td>
 
                       {/* Interactive Buttons for modal hooks */}

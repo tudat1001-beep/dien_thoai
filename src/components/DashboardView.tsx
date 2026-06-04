@@ -183,51 +183,42 @@ export default function DashboardView({
   }, [congNo, period, customStart, customEnd]);
 
   // CORE COMPUTATIONS IN FILTERED TIME RANGE
-  // 1. Revenue — derived from CongNo transaction log for accuracy,
-  //    with fallback to HoaDon.conNo for invoices without CongNo records
+  // Formula: Còn nợ = Tổng doanh thu - Đã thu - Trả lại
+  // "Đã thu" = daThanhToan (thanh toán tại quầy) + CongNo thanh toán riêng
+  // "Trả lại" = daTra (số tiền đã hoàn từ trả hàng)
   const metrics = useMemo(() => {
-    const filteredInvoiceIds = new Set(filteredInvoices.map(h => h.id));
-
-    // Build a map of real paid/debt for each filtered invoice
-    // from CongNo transaction log
-    const invoicePaid = new Map<string, number>();
-    const invoiceDebtFromLog = new Map<string, number>();
-
+    // Map CongNo payments by invoice ID
+    const invoiceCongNoPayments = new Map<string, number>();
     filteredDebts.forEach(c => {
-      if (c.hoaDonId && filteredInvoiceIds.has(c.hoaDonId)) {
-        if (c.loai === 'Thanh toán') {
-          invoicePaid.set(c.hoaDonId, (invoicePaid.get(c.hoaDonId) || 0) + c.soTien);
-        } else if (c.loai === 'Ghi nợ') {
-          invoiceDebtFromLog.set(c.hoaDonId, (invoiceDebtFromLog.get(c.hoaDonId) || 0) + c.soTien);
-        }
+      if (c.hoaDonId && c.loai === 'Thanh toán') {
+        invoiceCongNoPayments.set(
+          c.hoaDonId,
+          (invoiceCongNoPayments.get(c.hoaDonId) || 0) + c.soTien
+        );
       }
     });
 
-    // Per-invoice: use CongNo log if available, else fall back to HoaDon fields
-    let totalDebtFromLog = 0;
-    let totalPaidFromLog = 0;
+    let totalRevenue = 0; // Tổng doanh thu
+    let totalPaid = 0;    // Đã thu
+    let totalReturned = 0; // Trả lại
 
     filteredInvoices.forEach(h => {
-      const paid = invoicePaid.get(h.id) ?? h.daThanhToan;
-      const debtCreated = invoiceDebtFromLog.get(h.id) ?? h.conNo;
-
-      totalDebtFromLog += debtCreated;
-      totalPaidFromLog += paid;
+      totalRevenue += h.thanhTien;
+      // Đã thu = thanh toán tại quầy + thanh toán riêng qua CongNo
+      const congNoPayment = invoiceCongNoPayments.get(h.id) || 0;
+      totalPaid += h.daThanhToan + congNoPayment;
+      totalReturned += h.daTra || 0;
     });
 
-    // Returns value
+    // Returns value (from TraHang)
     let returnedValue = 0;
     filteredReturns.forEach(th => {
       returnedValue += th.soTienHoanTrat;
     });
 
-    // Gross revenue
-    let rev = 0;
+    // COGS
     let cogs = 0;
-    let totalDiscount = 0;
     filteredInvoices.forEach(h => {
-      rev += h.thanhTien;
-      totalDiscount += h.giamGia;
       const invoiceDetails = chiTietHoaDon.filter(d => d.hoaDonId === h.id);
       invoiceDetails.forEach(detail => {
         const prod = sanPham.find(p => p.id === detail.sanPhamId);
@@ -235,17 +226,17 @@ export default function DashboardView({
       });
     });
 
-    const unpaidDebt = Math.max(0, totalDebtFromLog - totalPaidFromLog - returnedValue);
-    const netProfit = rev - cogs - returnedValue;
+    const unpaidDebt = Math.max(0, totalRevenue - totalPaid - totalReturned);
+    const netProfit = Math.max(0, totalRevenue - cogs - totalReturned);
 
     return {
-      revenue: rev,
-      paid: totalPaidFromLog,
+      revenue: totalRevenue,
+      paid: totalPaid,
       unpaidDebt,
       cogs,
-      netProfit: netProfit > 0 ? netProfit : 0,
-      discount: totalDiscount,
-      returnsTotal: returnedValue,
+      netProfit,
+      discount: 0,
+      returnsTotal: totalReturned,
       invoiceCount: filteredInvoices.length
     };
   }, [filteredInvoices, chiTietHoaDon, sanPham, filteredDebts, filteredReturns]);
@@ -461,18 +452,26 @@ export default function DashboardView({
           </div>
         </div>
 
-        {/* Metric Card 3: Receivables remaining */}
+        {/* Metric Card 3: Outstanding Debt = Revenue - Received - Returned */}
         <div className="bg-white border border-slate-200 p-4 sm:p-5 rounded-2xl flex flex-col items-start justify-between gap-2 shadow-xs hover:shadow-sm transition duration-200 group min-h-[120px]">
           <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-widest block font-mono">
-            Công Nợ
+            Còn Nợ Phải Thu
           </span>
           <strong className="text-lg sm:text-2xl font-black text-amber-700 font-mono tracking-tight block">
             {formatMoney(metrics.unpaidDebt)}
           </strong>
-          <span className="text-[11px] text-zinc-500 flex items-center gap-1 font-sans truncate">
-            thu {formatMoney(metrics.paid)}
-          </span>
-          <div className="p-2 sm:p-3 bg-amber-50 text-amber-653 rounded-xl group-hover:scale-105 transition-transform shrink-0">
+          <div className="space-y-0.5">
+            <span className="text-[10px] text-zinc-500 flex items-center gap-1 font-sans">
+              Tổng: {formatMoney(metrics.revenue)}
+            </span>
+            <span className="text-[10px] text-emerald-600 flex items-center gap-1 font-sans">
+              Đã thu: {formatMoney(metrics.paid)}
+            </span>
+            <span className="text-[10px] text-red-500 flex items-center gap-1 font-sans">
+              Trả lại: {formatMoney(metrics.returnsTotal)}
+            </span>
+          </div>
+          <div className="p-2 sm:p-3 bg-amber-50 text-amber-650 rounded-xl group-hover:scale-105 transition-transform shrink-0">
             <ArrowUpRight className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
           </div>
         </div>
