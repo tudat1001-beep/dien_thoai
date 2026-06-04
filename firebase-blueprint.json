@@ -1,0 +1,158 @@
+{
+  "entities": {
+    "KhachHang": {
+      "title": "KhachHang",
+      "description": "Thong tin doi tac/khach hang dai ly",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ten": { "type": "string" },
+        "sdt": { "type": "string" },
+        "diaChi": { "type": "string" },
+        "mst": { "type": "string" },
+        "ghiChu": { "type": "string" },
+        "ngayTao": { "type": "string" }
+      },
+      "required": ["id", "ten", "sdt"]
+    },
+    "SanPham": {
+      "title": "SanPham",
+      "description": "Thong tin san pham va ton kho cua he thong",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ten": { "type": "string" },
+        "imei": { "type": "string" },
+        "giaNhap": { "type": "number" },
+        "giaBan": { "type": "number" },
+        "tonKho": { "type": "number" },
+        "trangThai": { "type": "string", "enum": ["Còn hàng", "Hết hàng"] }
+      },
+      "required": ["id", "ten", "giaNhap", "giaBan", "tonKho", "trangThai"]
+    },
+    "HoaDon": {
+      "title": "HoaDon",
+      "description": "Hoa don ban si cho dai ly",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "khachHangId": { "type": "string" },
+        "ngay": { "type": "string" },
+        "tongTien": { "type": "number" },
+        "giamGia": { "type": "number" },
+        "thanhTien": { "type": "number" },
+        "daThanhToan": { "type": "number" },
+        "conNo": { "type": "number" },
+        "ghiChu": { "type": "string" }
+      },
+      "required": ["id", "khachHangId", "ngay", "tongTien", "thanhTien", "daThanhToan"]
+    },
+    "ChiTietHoaDon": {
+      "title": "ChiTietHoaDon",
+      "description": "Chi tiet dong hoa don san pham",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "hoaDonId": { "type": "string" },
+        "sanPhamId": { "type": "string" },
+        "tenSanPham": { "type": "string" },
+        "imei": { "type": "string" },
+        "soLuong": { "type": "number" },
+        "donGia": { "type": "number" },
+        "thanhTien": { "type": "number" }
+      },
+      "required": ["id", "hoaDonId", "sanPhamId", "soLuong", "donGia", "thanhTien"]
+    },
+    "CongNo": {
+      "title": "CongNo",
+      "description": "Ghi no va bien lai thu thanh toan cua dai ly",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "khachHangId": { "type": "string" },
+        "ngay": { "type": "string" },
+        "loai": { "type": "string", "enum": ["Ghi nợ", "Thanh toán", "Giảm trừ do trả hàng"] },
+        "soTien": { "type": "number" },
+        "hoaDonId": { "type": "string" },
+        "ghiChu": { "type": "string" }
+      },
+      "required": ["id", "khachHangId", "ngay", "loai", "soTien"]
+    },
+    "GiaKhachHang": {
+      "title": "GiaKhachHang",
+      "description": "Hop dong gia rieng biet cho tung doi tac",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "khachHangId": { "type": "string" },
+        "sanPhamId": { "type": "string" },
+        "giaRieng": { "type": "number" }
+      },
+      "required": ["id", "khachHangId", "sanPhamId", "giaRieng"]
+    },
+    "LichSuGia": {
+      "title": "LichSuGia",
+      "description": "Lich su thay doi gia nhap/ban san pham",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sanPhamId": { "type": "string" },
+        "ngayThayDoi": { "type": "string" },
+        "giaCu": { "type": "number" },
+        "giaMoi": { "type": "number" }
+      },
+      "required": ["id", "sanPhamId", "ngayThayDoi", "giaCu", "giaMoi"]
+    },
+    "TraHang": {
+      "title": "TraHang",
+      "description": "Thu hoi san pham va doi tru tai chinh",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "hoaDonId": { "type": "string" },
+        "sanPhamId": { "type": "string" },
+        "soLuong": { "type": "number" },
+        "imei": { "type": "string" },
+        "ngayTra": { "type": "string" },
+        "soTienHoanTrat": { "type": "number" },
+        "lyDo": { "type": "string" },
+        "phuongThuc": { "type": "string", "enum": ["Trừ vào công nợ", "Hoàn tiền mặt"] }
+      },
+      "required": ["id", "hoaDonId", "sanPhamId", "soLuong", "ngayTra", "soTienHoanTrat", "phuongThuc"]
+    }
+  },
+  "firestore": {
+    "/khachHang/{id}": {
+      "schema": "KhachHang",
+      "description": "Danh sach khach hang dai ly si"
+    },
+    "/sanPham/{id}": {
+      "schema": "SanPham",
+      "description": "Danh sach san pham, gia ca, ton kho va thong tin IMEI"
+    },
+    "/hoaDon/{id}": {
+      "schema": "HoaDon",
+      "description": "Danh sach cac hoa don ban si da tao"
+    },
+    "/chiTietHoaDon/{id}": {
+      "schema": "ChiTietHoaDon",
+      "description": "Danh sach chi tiet vat pham trong tung phieu hoa don"
+    },
+    "/congNo/{id}": {
+      "schema": "CongNo",
+      "description": "Phieu ghi no/bien lai thanh toan theo doi cong no doi tac"
+    },
+    "/giaKhachHang/{id}": {
+      "schema": "GiaKhachHang",
+      "description": "Bang cau hinh ban gia rieng cho cua hang dac thu"
+    },
+    "/lichSuGia/{id}": {
+      "schema": "LichSuGia",
+      "description": "Nhat ky theo doi bien thong gia ban/nhap cua cac mat hang"
+    },
+    "/traHang/{id}": {
+      "schema": "TraHang",
+      "description": "Nhat ky tra hang thu hoi, hoan tien hoac doi tru cong no"
+    }
+  }
+}

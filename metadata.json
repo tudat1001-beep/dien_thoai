@@ -1,0 +1,6 @@
+{
+  "name": "Quản lý bán hàng",
+  "description": "Phần mềm quản lý bán hàng chuyên nghiệp, tích hợp đầy đủ các tính năng quản lý khách hàng, sản phẩm, hóa đơn, công nợ, giá riêng và đổi trả hàng.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

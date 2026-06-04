@@ -1,0 +1,202 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- REUSABLE SECURITY PRIMITIVES ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Guard against ID poisoning with size & regex checks
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Helper to reference incoming and existing data safely
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- ENTITY-SPECIFIC VALIDATION BLUEPRINTS ---
+
+    function isValidKhachHang(data) {
+      return data.keys().hasAll(['id', 'ten', 'sdt', 'diaChi', 'mst', 'ghiChu', 'ngayTao'])
+        && data.keys().size() == 7
+        && data.id is string && data.id.size() <= 64
+        && data.ten is string && data.ten.size() <= 200
+        && data.sdt is string && data.sdt.size() <= 20
+        && data.diaChi is string && data.diaChi.size() <= 500
+        && data.mst is string && data.mst.size() <= 30
+        && data.ghiChu is string && data.ghiChu.size() <= 1000
+        && data.ngayTao is string && data.ngayTao.size() <= 30;
+    }
+
+    function isValidSanPham(data) {
+      return data.keys().hasAll(['id', 'ten', 'imei', 'giaNhap', 'giaBan', 'tonKho', 'trangThai'])
+        && data.keys().size() == 7
+        && data.id is string && data.id.size() <= 64
+        && data.ten is string && data.ten.size() <= 300
+        && data.imei is string && data.imei.size() <= 10000
+        && data.giaNhap is number && data.giaNhap >= 0
+        && data.giaBan is number && data.giaBan >= 0
+        && data.tonKho is number && data.tonKho >= 0
+        && (data.trangThai == 'Còn hàng' || data.trangThai == 'Hết hàng');
+    }
+
+    function isValidHoaDon(data) {
+      return data.keys().hasAll(['id', 'khachHangId', 'ngay', 'tongTien', 'giamGia', 'thanhTien', 'daThanhToan', 'conNo', 'ghiChu'])
+        && data.keys().size() == 9
+        && data.id is string && data.id.size() <= 64
+        && data.khachHangId is string && data.khachHangId.size() <= 64
+        && data.ngay is string && data.ngay.size() <= 30
+        && data.tongTien is number && data.tongTien >= 0
+        && data.giamGia is number && data.giamGia >= 0
+        && data.thanhTien is number && data.thanhTien >= 0
+        && data.daThanhToan is number && data.daThanhToan >= 0
+        && data.conNo is number
+        && data.ghiChu is string && data.ghiChu.size() <= 1000;
+    }
+
+    function isValidChiTietHoaDon(data) {
+      return data.keys().hasAll(['id', 'hoaDonId', 'sanPhamId', 'tenSanPham', 'imei', 'soLuong', 'donGia', 'thanhTien'])
+        && data.keys().size() == 8
+        && data.id is string && data.id.size() <= 64
+        && data.hoaDonId is string && data.hoaDonId.size() <= 64
+        && data.sanPhamId is string && data.sanPhamId.size() <= 64
+        && data.tenSanPham is string && data.tenSanPham.size() <= 300
+        && data.imei is string && data.imei.size() <= 5000
+        && data.soLuong is number && data.soLuong >= 0
+        && data.donGia is number && data.donGia >= 0
+        && data.thanhTien is number && data.thanhTien >= 0;
+    }
+
+    function isValidCongNo(data) {
+      return data.keys().hasAll(['id', 'khachHangId', 'ngay', 'loai', 'soTien', 'ghiChu'])
+        && (data.keys().size() == 6 || (data.keys().size() == 7 && data.keys().hasAll(['hoaDonId'])))
+        && data.id is string && data.id.size() <= 64
+        && data.khachHangId is string && data.khachHangId.size() <= 64
+        && data.ngay is string && data.ngay.size() <= 30
+        && (data.loai == 'Ghi nợ' || data.loai == 'Thanh toán' || data.loai == 'Giảm trừ do trả hàng')
+        && data.soTien is number && data.soTien >= 0
+        && data.ghiChu is string && data.ghiChu.size() <= 1000
+        && (!data.keys().hasAll(['hoaDonId']) || (data.hoaDonId is string && data.hoaDonId.size() <= 64));
+    }
+
+    function isValidGiaKhachHang(data) {
+      return data.keys().hasAll(['id', 'khachHangId', 'sanPhamId', 'giaRieng'])
+        && data.keys().size() == 4
+        && data.id is string && data.id.size() <= 64
+        && data.khachHangId is string && data.khachHangId.size() <= 64
+        && data.sanPhamId is string && data.sanPhamId.size() <= 64
+        && data.giaRieng is number && data.giaRieng >= 0;
+    }
+
+    function isValidLichSuGia(data) {
+      return data.keys().hasAll(['id', 'sanPhamId', 'ngayThayDoi', 'giaCu', 'giaMoi'])
+        && data.keys().size() == 5
+        && data.id is string && data.id.size() <= 64
+        && data.sanPhamId is string && data.sanPhamId.size() <= 64
+        && data.ngayThayDoi is string && data.ngayThayDoi.size() <= 30
+        && data.giaCu is number && data.giaCu >= 0
+        && data.giaMoi is number && data.giaMoi >= 0;
+    }
+
+    function isValidTraHang(data) {
+      return data.keys().hasAll(['id', 'hoaDonId', 'sanPhamId', 'soLuong', 'imei', 'ngayTra', 'soTienHoanTrat', 'lyDo', 'phuongThuc'])
+        && data.keys().size() == 9
+        && data.id is string && data.id.size() <= 64
+        && data.hoaDonId is string && data.hoaDonId.size() <= 64
+        && data.sanPhamId is string && data.sanPhamId.size() <= 64
+        && data.soLuong is number && data.soLuong >= 0
+        && data.imei is string && data.imei.size() <= 5000
+        && data.ngayTra is string && data.ngayTra.size() <= 30
+        && data.soTienHoanTrat is number && data.soTienHoanTrat >= 0
+        && data.lyDo is string && data.lyDo.size() <= 1000
+        && (data.phuongThuc == 'Trừ vào công nợ' || data.phuongThuc == 'Hoàn tiền mặt');
+    }
+
+    // --- MATCH BLOCKS FOR MAIN COLLECTIONS ---
+
+    // 1. Khach Hang
+    match /khachHang/{id} {
+      allow get: if isSignedIn() && isValidId(id);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(id) && isValidKhachHang(incoming());
+      allow update: if isSignedIn() && isValidId(id) && isValidKhachHang(incoming());
+      allow delete: if isSignedIn() && isValidId(id);
+    }
+
+    // 2. San Pham
+    match /sanPham/{id} {
+      allow get: if isSignedIn() && isValidId(id);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(id) && isValidSanPham(incoming());
+      allow update: if isSignedIn() && isValidId(id) && isValidSanPham(incoming());
+      allow delete: if isSignedIn() && isValidId(id);
+    }
+
+    // 3. Hoa Don
+    match /hoaDon/{id} {
+      allow get: if isSignedIn() && isValidId(id);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(id) && isValidHoaDon(incoming());
+      allow update: if isSignedIn() && isValidId(id) && isValidHoaDon(incoming());
+      allow delete: if isSignedIn() && isValidId(id);
+    }
+
+    // 4. Chi Tiet Hoa Don
+    match /chiTietHoaDon/{id} {
+      allow get: if isSignedIn() && isValidId(id);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(id) && isValidChiTietHoaDon(incoming());
+      allow update: if isSignedIn() && isValidId(id) && isValidChiTietHoaDon(incoming());
+      allow delete: if isSignedIn() && isValidId(id);
+    }
+
+    // 5. Cong No
+    match /congNo/{id} {
+      allow get: if isSignedIn() && isValidId(id);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(id) && isValidCongNo(incoming());
+      allow update: if isSignedIn() && isValidId(id) && isValidCongNo(incoming());
+      allow delete: if isSignedIn() && isValidId(id);
+    }
+
+    // 6. Gia Khach Hang
+    match /giaKhachHang/{id} {
+      allow get: if isSignedIn() && isValidId(id);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(id) && isValidGiaKhachHang(incoming());
+      allow update: if isSignedIn() && isValidId(id) && isValidGiaKhachHang(incoming());
+      allow delete: if isSignedIn() && isValidId(id);
+    }
+
+    // 7. Lich Su Gia
+    match /lichSuGia/{id} {
+      allow get: if isSignedIn() && isValidId(id);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(id) && isValidLichSuGia(incoming());
+      allow update: if isSignedIn() && isValidId(id) && isValidLichSuGia(incoming());
+      allow delete: if isSignedIn() && isValidId(id);
+    }
+
+    // 8. Tra Hang
+    match /traHang/{id} {
+      allow get: if isSignedIn() && isValidId(id);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(id) && isValidTraHang(incoming());
+      allow update: if isSignedIn() && isValidId(id) && isValidTraHang(incoming());
+      allow delete: if isSignedIn() && isValidId(id);
+    }
+
+  }
+}
