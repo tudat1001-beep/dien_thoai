@@ -392,6 +392,14 @@ export async function sUpsertCongNo(cn: CongNo): Promise<void> {
   if (error) throw new Error(`Save Cong No error: ${error.message}`);
 }
 
+export async function sUpdateHoaDonAfterPayment(
+  updatedInvoice: HoaDon
+): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const { error } = await supabase.from('hoa_don').upsert(mapHoaDonToDb(updatedInvoice));
+  if (error) throw new Error(`Update HoaDon after payment error: ${error.message}`);
+}
+
 export async function sUpsertTraHangAndInventory(
   th: TraHang, 
   affectedProduct: SanPham, 

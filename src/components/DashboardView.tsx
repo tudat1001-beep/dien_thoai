@@ -183,48 +183,72 @@ export default function DashboardView({
   }, [congNo, period, customStart, customEnd]);
 
   // CORE COMPUTATIONS IN FILTERED TIME RANGE
-  // 1. Revenue
+  // 1. Revenue — derived from CongNo transaction log for accuracy,
+  //    with fallback to HoaDon.conNo for invoices without CongNo records
   const metrics = useMemo(() => {
-    let rev = 0;
-    let paid = 0;
-    let debt = 0;
-    let cogs = 0; // Cost of goods sold (giaNhap * soLuong)
-    let totalDiscount = 0;
+    const filteredInvoiceIds = new Set(filteredInvoices.map(h => h.id));
 
-    filteredInvoices.forEach(h => {
-      rev += h.thanhTien;
-      paid += h.daThanhToan;
-      debt += h.conNo;
-      totalDiscount += h.giamGia;
+    // Build a map of real paid/debt for each filtered invoice
+    // from CongNo transaction log
+    const invoicePaid = new Map<string, number>();
+    const invoiceDebtFromLog = new Map<string, number>();
 
-      // Find original cost of goods sold from details
-      const invoiceDetails = chiTietHoaDon.filter(d => d.hoaDonId === h.id);
-      invoiceDetails.forEach(detail => {
-        const prod = sanPham.find(p => p.id === detail.sanPhamId);
-        const costPrice = prod ? prod.giaNhap : 0;
-        cogs += costPrice * detail.soLuong;
-      });
+    filteredDebts.forEach(c => {
+      if (c.hoaDonId && filteredInvoiceIds.has(c.hoaDonId)) {
+        if (c.loai === 'Thanh toán') {
+          invoicePaid.set(c.hoaDonId, (invoicePaid.get(c.hoaDonId) || 0) + c.soTien);
+        } else if (c.loai === 'Ghi nợ') {
+          invoiceDebtFromLog.set(c.hoaDonId, (invoiceDebtFromLog.get(c.hoaDonId) || 0) + c.soTien);
+        }
+      }
     });
 
-    // Subtractions due to product returns
+    // Per-invoice: use CongNo log if available, else fall back to HoaDon fields
+    let totalDebtFromLog = 0;
+    let totalPaidFromLog = 0;
+
+    filteredInvoices.forEach(h => {
+      const paid = invoicePaid.get(h.id) ?? h.daThanhToan;
+      const debtCreated = invoiceDebtFromLog.get(h.id) ?? h.conNo;
+
+      totalDebtFromLog += debtCreated;
+      totalPaidFromLog += paid;
+    });
+
+    // Returns value
     let returnedValue = 0;
     filteredReturns.forEach(th => {
       returnedValue += th.soTienHoanTrat;
     });
 
+    // Gross revenue
+    let rev = 0;
+    let cogs = 0;
+    let totalDiscount = 0;
+    filteredInvoices.forEach(h => {
+      rev += h.thanhTien;
+      totalDiscount += h.giamGia;
+      const invoiceDetails = chiTietHoaDon.filter(d => d.hoaDonId === h.id);
+      invoiceDetails.forEach(detail => {
+        const prod = sanPham.find(p => p.id === detail.sanPhamId);
+        cogs += (prod ? prod.giaNhap : 0) * detail.soLuong;
+      });
+    });
+
+    const unpaidDebt = Math.max(0, totalDebtFromLog - totalPaidFromLog - returnedValue);
     const netProfit = rev - cogs - returnedValue;
 
     return {
       revenue: rev,
-      paid,
-      unpaidDebt: debt,
+      paid: totalPaidFromLog,
+      unpaidDebt,
       cogs,
       netProfit: netProfit > 0 ? netProfit : 0,
       discount: totalDiscount,
       returnsTotal: returnedValue,
       invoiceCount: filteredInvoices.length
     };
-  }, [filteredInvoices, chiTietHoaDon, sanPham, filteredReturns]);
+  }, [filteredInvoices, chiTietHoaDon, sanPham, filteredDebts, filteredReturns]);
 
   // DAILY PROGRESSION DATA POINT CALCULATOR FOR THE CHART
   const chartDataPoints = useMemo(() => {

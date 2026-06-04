@@ -20,7 +20,8 @@ import {
   sUpsertGiaKhachHang,
   sDeleteGiaKhachHang,
   sUpsertLichSuGia,
-  sSyncAllLocalStorageToSupabase
+  sSyncAllLocalStorageToSupabase,
+  sUpdateHoaDonAfterPayment
 } from './lib/supabaseStore';
 import {
   INITIAL_KHACH_HANG,
@@ -512,6 +513,32 @@ export default function App() {
 
   // 6. Direct Payment Receipts
   const handleAddCongNo = async (cn: CongNo) => {
+    // CRITICAL FIX: Sync payment back to the original invoice so HoaDon stays consistent
+    if (cn.loai === 'Thanh toán' && cn.hoaDonId) {
+      const targetHoaDon = hoaDon.find(h => h.id === cn.hoaDonId);
+      if (targetHoaDon) {
+        const updatedInvoice: HoaDon = {
+          ...targetHoaDon,
+          daThanhToan: targetHoaDon.daThanhToan + cn.soTien,
+          conNo: Math.max(0, targetHoaDon.conNo - cn.soTien)
+        };
+
+        if (isSupabaseConfigured) {
+          try {
+            await sUpdateHoaDonAfterPayment(updatedInvoice);
+            await sUpsertCongNo(cn);
+          } catch (err) {
+            alert('Lỗi ghi phiếu công nợ lên Supabase!');
+            return;
+          }
+        }
+
+        setHoaDon(prev => prev.map(h => h.id === cn.hoaDonId ? updatedInvoice : h));
+        setCongNo(prev => [cn, ...prev]);
+        return;
+      }
+    }
+
     if (isSupabaseConfigured) {
       try {
         await sUpsertCongNo(cn);
