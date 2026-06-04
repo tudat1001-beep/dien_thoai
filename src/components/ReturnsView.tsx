@@ -160,7 +160,7 @@ export default function ReturnsView({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       
-      {/* LEFT SECTION: RETURN TRANSACTION HISTORY LOG (col-span-7) */}
+      {/* MOBILE: appears 1st | DESKTOP: LEFT side (col-span-7) */}
       <div className="lg:col-span-7 space-y-4">
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
@@ -223,8 +223,8 @@ export default function ReturnsView({
         </div>
       </div>
 
-      {/* RIGHT SECTION: REGISTER A NEW RETURN TRANSACTION FORM (col-span-5) */}
-      <div className="lg:col-span-5 space-y-4">
+      {/* MOBILE: appears 2nd | DESKTOP: RIGHT side (col-span-5) */}
+      <div className="lg:col-span-5 order-first lg:order-last space-y-4">
         {/* Success Alert Banner */}
         {successMsg && (
           <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs p-3.5 rounded-lg flex items-start gap-2 shadow-sm animate-bounce">
