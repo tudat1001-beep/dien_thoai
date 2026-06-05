@@ -183,34 +183,33 @@ export default function DashboardView({
   }, [congNo, period, customStart, customEnd]);
 
   // CORE COMPUTATIONS IN FILTERED TIME RANGE
-  // Formula: Còn nợ = Tổng doanh thu - Đã thu - Trả lại
-  // "Đã thu" = daThanhToan (thanh toán tại quầy) + CongNo thanh toán riêng
-  // "Trả lại" = daTra (số tiền đã hoàn từ trả hàng)
+  // ALL metrics derived from CongNo log — same source as CustomersView
+  // Formula: Còn nợ = Σ(Ghi nợ) - Σ(Thanh toán) - Σ(Giảm trừ do trả hàng)
   const metrics = useMemo(() => {
-    // Map CongNo payments by invoice ID
-    const invoiceCongNoPayments = new Map<string, number>();
+    // Get IDs of invoices in the filtered time range
+    const filteredInvoiceIds = new Set(filteredInvoices.map(h => h.id));
+
+    // Aggregate CongNo by invoice for filtered invoices
+    let totalDebtCreated = 0;  // Σ(Ghi nợ)
+    let totalPaid = 0;         // Σ(Thanh toán)
+    let totalReturned = 0;     // Σ(Giảm trừ do trả hàng)
+
     filteredDebts.forEach(c => {
-      if (c.hoaDonId && c.loai === 'Thanh toán') {
-        invoiceCongNoPayments.set(
-          c.hoaDonId,
-          (invoiceCongNoPayments.get(c.hoaDonId) || 0) + c.soTien
-        );
+      if (c.hoaDonId && filteredInvoiceIds.has(c.hoaDonId)) {
+        if (c.loai === 'Ghi nợ') {
+          totalDebtCreated += c.soTien;
+        } else if (c.loai === 'Thanh toán') {
+          totalPaid += c.soTien;
+        } else if (c.loai === 'Giảm trừ do trả hàng') {
+          totalReturned += c.soTien;
+        }
       }
     });
 
-    let totalRevenue = 0; // Tổng doanh thu
-    let totalPaid = 0;    // Đã thu
-    let totalReturned = 0; // Trả lại
+    // Revenue: sum of thanhTien for invoices in period
+    const totalRevenue = filteredInvoices.reduce((sum, h) => sum + h.thanhTien, 0);
 
-    filteredInvoices.forEach(h => {
-      totalRevenue += h.thanhTien;
-      // Đã thu = thanh toán tại quầy + thanh toán riêng qua CongNo
-      const congNoPayment = invoiceCongNoPayments.get(h.id) || 0;
-      totalPaid += h.daThanhToan + congNoPayment;
-      totalReturned += h.daTra || 0;
-    });
-
-    // Returns value (from TraHang)
+    // Returns value from TraHang (for display)
     let returnedValue = 0;
     filteredReturns.forEach(th => {
       returnedValue += th.soTienHoanTrat;
@@ -226,7 +225,7 @@ export default function DashboardView({
       });
     });
 
-    const unpaidDebt = Math.max(0, totalRevenue - totalPaid - totalReturned);
+    const unpaidDebt = Math.max(0, totalDebtCreated - totalPaid - totalReturned);
     const netProfit = Math.max(0, totalRevenue - cogs - totalReturned);
 
     return {
@@ -452,7 +451,7 @@ export default function DashboardView({
           </div>
         </div>
 
-        {/* Metric Card 3: Outstanding Debt = Revenue - Received - Returned */}
+        {/* Metric Card 3: Outstanding Debt = sum of all customer debts (matches CustomersView) */}
         <div className="bg-white border border-slate-200 p-4 sm:p-5 rounded-2xl flex flex-col items-start justify-between gap-2 shadow-xs hover:shadow-sm transition duration-200 group min-h-[120px]">
           <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-widest block font-mono">
             Còn Nợ Phải Thu
@@ -462,13 +461,13 @@ export default function DashboardView({
           </strong>
           <div className="space-y-0.5">
             <span className="text-[10px] text-zinc-500 flex items-center gap-1 font-sans">
-              Tổng: {formatMoney(metrics.revenue)}
+              Ghi nợ: {formatMoney(metrics.paid + metrics.unpaidDebt + metrics.returnsTotal)}
             </span>
             <span className="text-[10px] text-emerald-600 flex items-center gap-1 font-sans">
-              Đã thu: {formatMoney(metrics.paid)}
+              Thanh toán: {formatMoney(metrics.paid)}
             </span>
             <span className="text-[10px] text-red-500 flex items-center gap-1 font-sans">
-              Trả lại: {formatMoney(metrics.returnsTotal)}
+              Giảm trừ: {formatMoney(metrics.returnsTotal)}
             </span>
           </div>
           <div className="p-2 sm:p-3 bg-amber-50 text-amber-650 rounded-xl group-hover:scale-105 transition-transform shrink-0">

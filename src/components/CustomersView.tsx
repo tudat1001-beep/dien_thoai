@@ -173,37 +173,35 @@ function findNextCustomerId(khachHang: KhachHang[]): string {
       .sort((a, b) => b.ngay.localeCompare(a.ngay));
   }, [hoaDon, selectedCustomerId]);
 
-  // Stats for active customer — formula: Còn nợ = Tổng mua - Đã thu - Trả lại
+  // Stats for active customer — derived from CongNo log (same as customerDebts + Dashboard)
   const activeCustomerStats = useMemo(() => {
     if (!selectedCustomerId) return { totalOrders: 0, totalSpent: 0, totalDebt: 0, totalReturns: 0 };
 
-    // Get CongNo payments for this customer's invoices
-    const customerInvoiceIds = new Set(
-      hoaDon
-        .filter(h => h.khachHangId === selectedCustomerId)
-        .map(h => h.id)
-    );
+    const customerInvoices = hoaDon.filter(h => h.khachHangId === selectedCustomerId);
+    const invoiceIds = new Set(customerInvoices.map(h => h.id));
 
-    const invoices = hoaDon.filter(h => h.khachHangId === selectedCustomerId);
-    const totalSpent = invoices.reduce((sum, h) => sum + h.thanhTien, 0);
+    let ghiNo = 0;    // Σ(Ghi nợ) for this customer's invoices
+    let thanhToan = 0; // Σ(Thanh toán)
+    let giamTru = 0;   // Σ(Giảm trừ do trả hàng)
 
-    // Sum CongNo payments linked to these invoices
-    let totalPaidViaCongNo = 0;
     congNo.forEach(c => {
-      if (customerInvoiceIds.has(c.hoaDonId) && c.loai === 'Thanh toán') {
-        totalPaidViaCongNo += c.soTien;
-      }
+      if (c.khachHangId !== selectedCustomerId) return;
+      if (c.hoaDonId && !invoiceIds.has(c.hoaDonId)) return; // skip unrelated invoices
+
+      if (c.loai === 'Ghi nợ') ghiNo += c.soTien;
+      else if (c.loai === 'Thanh toán') thanhToan += c.soTien;
+      else if (c.loai === 'Giảm trừ do trả hàng') giamTru += c.soTien;
     });
 
-    const totalPaid = invoices.reduce((sum, h) => sum + h.daThanhToan, 0) + totalPaidViaCongNo;
+    const totalSpent = customerInvoices.reduce((sum, h) => sum + h.thanhTien, 0);
     const totalReturns = traHang
-      .filter(t => invoices.some(i => i.id === t.hoaDonId))
+      .filter(t => customerInvoices.some(i => i.id === t.hoaDonId))
       .reduce((sum, t) => sum + t.soTienHoanTrat, 0);
 
-    const totalDebt = Math.max(0, totalSpent - totalPaid - totalReturns);
+    const totalDebt = Math.max(0, ghiNo - thanhToan - giamTru);
 
     return {
-      totalOrders: invoices.length,
+      totalOrders: customerInvoices.length,
       totalSpent,
       totalDebt,
       totalReturns

@@ -193,42 +193,42 @@ export default function InvoicesView({
     return chiTietHoaDon.filter(d => d.hoaDonId === editingInvoice.id);
   }, [editingInvoice, chiTietHoaDon]);
 
-  // Analytics of filtered list — formula: Còn nợ = Tổng thành tiền - Đã thu - Trả lại
+  // Analytics of filtered list — derived from CongNo log (same source as Dashboard + customerDebts)
   const summaryKPIs = useMemo(() => {
-    // Build map of CongNo payments by invoice
-    const invoiceCongNoPayments = new Map<string, number>();
-    congNo.forEach(c => {
-      if (c.hoaDonId && c.loai === 'Thanh toán') {
-        invoiceCongNoPayments.set(
-          c.hoaDonId,
-          (invoiceCongNoPayments.get(c.hoaDonId) || 0) + c.soTien
-        );
-      }
-    });
+    const filteredInvoiceIds = new Set(filteredInvoices.map(h => h.id));
 
-    let salesCount = finalizedInvoices.length;
     let totalRevenue = 0;
-    let totalReceived = 0;
+    let totalDebtCreated = 0;
+    let totalPaid = 0;
     let totalDebtOutstanding = 0;
     let totalReturned = 0;
 
-    finalizedInvoices.forEach(h => {
+    filteredInvoices.forEach(h => {
       totalRevenue += h.thanhTien;
-      const congNoPayment = invoiceCongNoPayments.get(h.id) || 0;
-      totalReceived += h.daThanhToan + congNoPayment;
-      totalReturned += h.daTra || 0;
     });
 
-    totalDebtOutstanding = Math.max(0, totalRevenue - totalReceived - totalReturned);
+    congNo.forEach(c => {
+      if (c.hoaDonId && filteredInvoiceIds.has(c.hoaDonId)) {
+        if (c.loai === 'Ghi nợ') {
+          totalDebtCreated += c.soTien;
+        } else if (c.loai === 'Thanh toán') {
+          totalPaid += c.soTien;
+        } else if (c.loai === 'Giảm trừ do trả hàng') {
+          totalReturned += c.soTien;
+        }
+      }
+    });
+
+    totalDebtOutstanding = Math.max(0, totalDebtCreated - totalPaid - totalReturned);
 
     return {
-      salesCount,
+      salesCount: filteredInvoices.length,
       totalRevenue,
-      totalReceived,
+      totalPaid,
       totalDebtOutstanding,
       totalReturned
     };
-  }, [finalizedInvoices, congNo]);
+  }, [filteredInvoices, congNo]);
 
   const formatMoney = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
@@ -311,7 +311,7 @@ export default function InvoicesView({
           </div>
           <div className="min-w-0">
             <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider text-slate-400 block truncate">Đã thu</span>
-            <strong className="block text-sm sm:text-base font-black text-sky-700 font-mono truncate">{formatMoney(summaryKPIs.totalReceived)}</strong>
+            <strong className="block text-sm sm:text-base font-black text-sky-700 font-mono truncate">{formatMoney(summaryKPIs.totalPaid)}</strong>
           </div>
         </div>
 
